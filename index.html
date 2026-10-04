@@ -9,8 +9,8 @@
      Creators vs. Lurkers — MARK 3620 L9, live k-means
      ------------------------------------------------------------
      Links:
-       students:    https://davidlam218.github.io/kmeans/
-       instructor:  https://davidlam218.github.io/kmeans/?instructor=3620
+       students:    https://davidlam218.github.io/
+       instructor:  https://davidlam218.github.io/?instructor=3620
      Add ?class=<name> for a separate room, e.g. ?class=test to rehearse.
      Data lives in the same Firebase project as Sampling the Slope, under
        classes/<class>/kmeans/responses  and  classes/<class>/kmeans/state
@@ -119,7 +119,7 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
 <main id="student" hidden>
   <div class="label">MARK 3620 · Customer Analytics</div>
   <h1>Creator or lurker?</h1>
-  <p class="lede">Two quick questions. Answers are anonymous and only shown as a dot.</p>
+  <p class="lede">Two quick questions. Your answer shows up as a dot on the class screen.</p>
 
   <section id="sForm" class="card">
     <div class="q">
@@ -137,8 +137,8 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
       <div class="ticks"><span>0</span><span>2</span><span>4</span><span>6</span><span>8+</span></div>
     </div>
     <div class="q" style="margin-bottom:12px">
-      <div class="qt">Nickname <span class="muted" style="font-weight:400">(optional)</span></div>
-      <input class="text" id="inNick" maxlength="16" placeholder="Optional" autocomplete="off">
+      <div class="qt">Nickname <span class="muted" style="font-weight:400">(optional; use any name you can remember; this will be shown to the class)</span></div>
+      <input class="text" id="inNick" maxlength="16" placeholder="e.g. Panda88" autocomplete="off">
     </div>
     <button class="btn primary big" id="submitBtn">Submit</button>
     <p class="hint" id="formMsg"></p>
@@ -211,7 +211,7 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
       <div class="row" style="margin-top:8px">
         <button class="btn" id="regBtn" aria-pressed="true">Regions</button>
         <button class="btn" id="lineBtn" aria-pressed="true">Lines</button>
-        <button class="btn" id="nickBtn" aria-pressed="false">Nicknames</button>
+        <button class="btn" id="nickBtn" aria-pressed="true">Nicknames</button>
       </div>
       <p class="hint" id="stdHint" hidden>Distances are now measured in standard deviations, so posts and hours count equally.</p>
     </div>
@@ -250,10 +250,11 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
     <div class="panel">
       <h2>Session</h2>
       <div class="row">
+        <button class="btn" id="demo10Btn">Add 10 sample points</button>
         <button class="btn" id="demoBtn">Add 80 demo students</button>
         <button class="btn warn" id="clearBtn">Clear all answers</button>
       </div>
-      <p class="hint">Demo students are saved to this class like real answers. Use a rehearsal class (e.g. <span class="mono">?class=test</span>) or clear before the lecture.</p>
+      <p class="hint">Sample points are saved to this class like real answers. Use a rehearsal class (e.g. <span class="mono">?class=test</span>) or clear before the lecture.</p>
     </div>
   </div>
 </div>
@@ -452,7 +453,7 @@ function instructor() {
 
   let raw = {}, pts = [], uids = [];
   const S = { K: 3, std: false, C: null, prevC: null, a: null, prevA: null, assignC: null, phase: "start", round: 0, done: false, wssHist: [], locked: false,
-              askNames: false, showNames: false, placing: false, regions: true, lines: true, nicks: false, auto: null, label: "" };
+              askNames: false, showNames: false, placing: false, regions: true, lines: true, nicks: true, auto: null, label: "" };
   let sc = { mx: 0, my: 0, sx: 1, sy: 1 };
 
   // K buttons
@@ -523,7 +524,9 @@ function instructor() {
   let clearArm = 0;
   $("clearBtn").onclick = () => { if (Date.now() - clearArm > 4000) { clearArm = Date.now(); $("clearBtn").textContent = "Click again to clear"; setTimeout(() => $("clearBtn").textContent = "Clear all answers", 4000); return; }
     clearArm = 0; $("clearBtn").textContent = "Clear all answers"; store.clear().then(() => { resetRun("Answers cleared."); toast("All answers cleared."); }); };
-  $("demoBtn").onclick = () => { const obj = {}; demoData(80).forEach((r, i) => { obj["demo" + Date.now().toString(36) + i] = r; }); store.addMany(obj).then(() => toast("Added 80 demo students.")); };
+  function addDemo(n) { const obj = {}, stamp = Date.now().toString(36); demoData(n).forEach((r, i) => { obj["demo" + stamp + i] = r; }); store.addMany(obj).then(() => toast(`Added ${n} sample ${n === 1 ? "point" : "points"}.`)).catch(e => toast("Could not add: " + (e && e.code ? e.code : "check connection"))); }
+  $("demoBtn").onclick = () => addDemo(80);
+  $("demo10Btn").onclick = () => addDemo(10);
 
   // ---------- main plot ----------
   const wrap = $("plotWrap"), svg = $("plot"), cv = $("regions");
