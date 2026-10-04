@@ -106,6 +106,13 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
 .seg button{border:0;background:var(--card);padding:6px 11px;cursor:pointer;font-weight:600}
 .seg button[aria-pressed="true"]{background:var(--navy);color:#fff}
 .hint{font-size:.85rem;color:var(--muted);margin:6px 0 0}
+.distBox{position:absolute;right:14px;top:12px;z-index:3;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px 9px;box-shadow:0 4px 16px rgba(20,36,58,.12);max-width:440px;font-size:.92rem}
+.distBox .who{font-weight:700;margin-bottom:2px}
+.distBox .ans{color:var(--muted);margin-bottom:6px}
+.distBox .calc{font-family:var(--mono);font-size:.82rem;background:var(--soft);border-radius:6px;padding:6px 8px;margin:6px 0;line-height:1.5}
+.distBox table td{font-size:.88rem;padding:3px 5px}
+.distBox tr.near td{font-weight:700}
+.distBox .x{position:absolute;right:8px;top:4px;border:0;background:none;font-size:1.2rem;cursor:pointer;color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:8px;font-size:.92rem;opacity:0;transition:opacity .25s;pointer-events:none}
 .toast.on{opacity:1}
 .mode{font-size:.75rem;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--muted);font-weight:600}
@@ -123,8 +130,8 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
 
   <section id="sForm" class="card">
     <div class="q">
-      <div class="qt">How many times a week do you post?</div>
-      <div class="qs">Instagram, Xiaohongshu, Threads… stories and reposts count.</div>
+      <div class="qt">How many times a week do you post on social media?</div>
+      <div class="qs">Facebook, Instagram, X (Twitter), LinkedIn, Reddit, TikTok, WeChat, RedNote, Threads… stories and reposts count.</div>
       <div><span class="val" id="vPosts">0</span><span class="unit">posts / week</span></div>
       <input type="range" id="inPosts" min="0" max="20" step="1" value="0" aria-label="Posts per week">
       <div class="ticks"><span>0</span><span>5</span><span>10</span><span>15</span><span>20+</span></div>
@@ -171,6 +178,7 @@ td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-over
     </div>
     <div class="plotWrap" id="plotWrap">
       <canvas id="regions"></canvas>
+      <div class="distBox" id="distBox" hidden></div>
       <svg id="plot" role="img" aria-label="Class answers with cluster centres"></svg>
     </div>
     <div class="stepbar">
@@ -556,12 +564,19 @@ function instructor() {
     el("text", { x: 22, y: G.sy(CFG.Y.max / 2), "text-anchor": "middle", "font-size": 17, "font-weight": 700, fill: "#004479", transform: `rotate(-90 22 ${G.sy(CFG.Y.max / 2)})` }, svg).textContent = "Hours browsing per day  →  (lurkers)";
     // lines
     const AC = S.assignC;
-    if (S.a && S.lines && C) pts.forEach((p, i) => { const k = S.a[i]; const j = jitter(p.u); el("line", { x1: G.sx(p.x) + j[0] * 10, y1: G.sy(p.y) + j[1] * 10, x2: G.sx(C[k][0]), y2: G.sy(C[k][1]), stroke: COLORS[k], "stroke-width": 1.2, opacity: .28 }, svg); });
+    if (S.a && C) pts.forEach((p, i) => { const k = S.a[i]; const j = jitter(p.u); const x1 = G.sx(p.x) + j[0] * 10, y1 = G.sy(p.y) + j[1] * 10, x2 = G.sx(C[k][0]), y2 = G.sy(C[k][1]);
+      const sel = selU === p.u;
+      if (S.lines || sel) el("line", { x1, y1, x2, y2, stroke: COLORS[k], "stroke-width": sel ? 4 : 1.2, opacity: sel ? 1 : .28 }, svg);
+      if (S.lines) { const hit = el("line", { x1, y1, x2, y2, stroke: "transparent", "stroke-width": 12, style: "cursor:pointer;pointer-events:stroke" }, svg); hit.addEventListener("click", ev => { ev.stopPropagation(); selectPoint(p.u); }); }
+      if (sel) { const d = Math.sqrt(d2(p, C[k], sc)); const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        el("text", { x: mx + 8, y: my - 8, "font-size": 18, "font-weight": 700, fill: COLORS[k], "font-family": "IBM Plex Mono, monospace", "paint-order": "stroke", stroke: "#fff", "stroke-width": 5 }, svg).textContent = "d = " + fmtD(d); } });
     // points
     const switched = new Set(); if (S.a && S.prevA) S.a.forEach((k, i) => { if (S.prevA[i] !== undefined && S.prevA[i] !== k) switched.add(i); });
     pts.forEach((p, i) => { const j = jitter(p.u); const x = G.sx(p.x) + j[0] * 10, y = G.sy(p.y) + j[1] * 10; const k = S.a ? S.a[i] : -1;
       if (switched.has(i) && S.phase === "update") el("circle", { cx: x, cy: y, r: 11, fill: "none", stroke: COLORS[k], "stroke-width": 2.5 }, svg);
-      el("circle", { cx: x, cy: y, r: 6.5, fill: k >= 0 ? COLORS[k] : "#6B7B8E", stroke: "#fff", "stroke-width": 1.4, opacity: .92 }, svg);
+      if (selU === p.u) el("circle", { cx: x, cy: y, r: 12, fill: "none", stroke: "#14243A", "stroke-width": 2.5 }, svg);
+      const dot = el("circle", { cx: x, cy: y, r: 6.5, fill: k >= 0 ? COLORS[k] : "#6B7B8E", stroke: "#fff", "stroke-width": 1.4, opacity: .92, style: S.placing ? "" : "cursor:pointer" }, svg);
+      if (!S.placing) dot.addEventListener("click", ev => { if (!S.C || !S.C.length) return; ev.stopPropagation(); selectPoint(p.u); });
       if (S.nicks && p.nick) el("text", { x: x + 9, y: y - 8, "font-size": 12, fill: "#14243A" }, svg).textContent = p.nick; });
     // trails
     if (S.prevC && S.C && !anim) S.C.forEach((c, k) => { const pc = S.prevC[k]; if (!pc) return; el("line", { x1: G.sx(pc[0]), y1: G.sy(pc[1]), x2: G.sx(c[0]), y2: G.sy(c[1]), stroke: COLORS[k], "stroke-width": 2, "stroke-dasharray": "5 5", opacity: .7 }, svg);
@@ -571,6 +586,7 @@ function instructor() {
       el("path", { d: "M0,-19 L19,0 L0,19 L-19,0 Z", fill: COLORS[k], stroke: "#fff", "stroke-width": 3 }, g);
       const lab = el("text", { x: 24, y: -14, "font-size": 15, "font-weight": 700, fill: COLORS[k], "font-family": "IBM Plex Mono, monospace", "paint-order": "stroke", stroke: "#fff", "stroke-width": 4 }, g);
       lab.textContent = `${fmtN(c[0])}, ${fmtN(c[1])}`; });
+    if (u === undefined) renderDist();
     if (!pts.length) el("text", { x: w / 2, y: h / 2, "text-anchor": "middle", "font-size": 22, fill: "#5C6B7E" }, svg).textContent = "Waiting for answers… scan the QR code";
   }
   function drawRegions(C) {
@@ -583,8 +599,29 @@ function instructor() {
       const k = nearest({ x: G.ix(px + cell / 2), y: G.iy(py + cell / 2) }, C, sc);
       ctx.fillStyle = COLORS[k] + "1A"; ctx.fillRect(px, py, Math.min(cell, x1 - px), Math.min(cell, y1 - py)); }
   }
+  // ---------- click a line or dot: show the distance calculation ----------
+  let selU = null;
+  const fmtD = v => (Math.round(v * 100) / 100).toFixed(2);
+  function selectPoint(u) { selU = selU === u ? null : u; draw(); renderDist(); }
+  function renderDist() {
+    const box = $("distBox"); const i = pts.findIndex(p => p.u === selU); const C = S.C;
+    if (!selU || i < 0 || !C || !C.length) { box.hidden = true; box.innerHTML = ""; return; }
+    const p = pts[i], k = S.a ? S.a[i] : -1;
+    const ds = C.map(c => Math.sqrt(d2(p, c, sc))); const near = ds.indexOf(Math.min(...ds));
+    const kk = k >= 0 ? k : near, c = C[kk];
+    const term = (v, m, s) => S.std ? `((${fmtN(v)} − ${fmt1(m)}) / ${fmt1(s)})²` : `(${fmtN(v)} − ${fmt1(m)})²`;
+    const who = p.nick ? escapeHtml(p.nick) : "This student";
+    box.innerHTML = `<button class="x" aria-label="Close">×</button>
+      <div class="who">${who}</div>
+      <div class="ans">${fmtN(p.x)} posts a week, ${fmtN(p.y)} hours a day</div>
+      <div>Distance to <span class="swatch" style="background:${COLORS[kk]}"></span><b>${CNAMES[kk]}</b> centre (${fmt1(c[0])}, ${fmt1(c[1])}):</div>
+      <div class="calc">d = √[ ${term(p.x, c[0], sc.sx)} + ${term(p.y, c[1], sc.sy)} ]<br>&nbsp;&nbsp;= ${fmtD(ds[kk])}${S.std ? "  <span style='font-family:var(--sans)'>(in standard deviations)</span>" : ""}</div>
+      <table>${C.map((cc, j) => `<tr class="${j === near ? "near" : ""}"><td><span class="swatch" style="background:${COLORS[j]}"></span>${CNAMES[j]}</td><td class="mono">${fmtD(ds[j])}</td><td style="text-align:left">${j === near ? "← nearest" : ""}${j === k && j !== near ? "joined last round · will switch" : ""}</td></tr>`).join("")}</table>`;
+    box.querySelector(".x").onclick = () => { selU = null; draw(); renderDist(); };
+    box.hidden = false;
+  }
   svg.addEventListener("click", ev => {
-    if (!S.placing) return; const r = svg.getBoundingClientRect(); const x = G.ix(ev.clientX - r.left), y = G.iy(ev.clientY - r.top);
+    if (!S.placing) { if (selU) { selU = null; draw(); renderDist(); } return; } const r = svg.getBoundingClientRect(); const x = G.ix(ev.clientX - r.left), y = G.iy(ev.clientY - r.top);
     if (x < 0 || x > CFG.X.max || y < 0 || y > CFG.Y.max) return;
     S.C.push([Math.round(x * 2) / 2, Math.round(y * 4) / 4]);
     if (S.C.length >= S.K) { const C = S.C; S.placing = false; $("clickBtn").setAttribute("aria-pressed", "false"); begin(C, "Hand-placed start"); }
