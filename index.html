@@ -1,17 +1,687 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="style.css">
-    <title>Simple Video Website</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Creators vs. Lurkers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<!-- ============================================================
+     Creators vs. Lurkers — MARK 3620 L9, live k-means
+     ------------------------------------------------------------
+     Links:
+       students:    https://davidlam218.github.io/kmeans/
+       instructor:  https://davidlam218.github.io/kmeans/?instructor=3620
+     Add ?class=<name> for a separate room, e.g. ?class=test to rehearse.
+     Data lives in the same Firebase project as Sampling the Slope, under
+       classes/<class>/kmeans/responses  and  classes/<class>/kmeans/state
+     If Firebase cannot load, the page falls back to "this browser only":
+     tabs on the same computer still share answers, which is enough to rehearse.
+     ============================================================ -->
+<script>
+window.KM_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCEot7xChdR9Ou49cuc3k4rEqkSSXr0Q1Y",
+  authDomain: "sampling-error.firebaseapp.com",
+  databaseURL: "https://sampling-error-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "sampling-error",
+  storageBucket: "sampling-error.firebasestorage.app",
+  messagingSenderId: "170215271736",
+  appId: "1:170215271736:web:7cce112579452c96c5e5cd"
+};
+</script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root{
+  --bg:#F4F6F9; --card:#FFFFFF; --ink:#14243A; --muted:#5C6B7E; --line:#DCE3EB; --grid:#E9EEF3; --soft:#EEF3F8;
+  --navy:#004479; --gold:#D19809; --red:#C00000; --ok:#1F7A6E;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.45}
+[hidden]{display:none!important}
+button,input,select{font:inherit;color:inherit}
+.btn{border:1.5px solid var(--line);background:var(--card);border-radius:8px;padding:8px 13px;cursor:pointer;font-weight:600;white-space:nowrap}
+.btn:hover{border-color:#B8C4D2}
+.btn.primary{background:var(--navy);border-color:var(--navy);color:#fff}
+.btn.warn{color:var(--red)}
+.btn[aria-pressed="true"]{background:var(--soft);border-color:var(--navy)}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.label{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:700}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.swatch{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:6px}
+
+/* ---------- student (phone) ---------- */
+#student{max-width:520px;margin:0 auto;padding:max(16px,env(safe-area-inset-top)) 16px 32px}
+#student h1{font-size:1.55rem;line-height:1.2;margin:6px 0 4px;letter-spacing:-.01em}
+#student .lede{color:var(--muted);margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+.q{margin-bottom:18px}
+.q .qt{font-weight:600;margin-bottom:2px}
+.q .qs{color:var(--muted);font-size:.9rem;margin-bottom:8px}
+.q .val{font-family:var(--mono);font-size:2rem;font-weight:600;color:var(--navy);line-height:1}
+.q .unit{color:var(--muted);font-size:.95rem;margin-left:6px}
+input[type=range]{width:100%;height:34px;accent-color:var(--navy)}
+.ticks{display:flex;justify-content:space-between;color:var(--muted);font-size:.78rem;font-family:var(--mono);margin-top:-4px}
+.text{width:100%;border:1.5px solid var(--line);border-radius:8px;padding:10px 12px;background:#fff}
+.big{width:100%;padding:13px;font-size:1.05rem}
+.banner{border-radius:10px;padding:12px 14px;margin-bottom:12px;background:var(--soft);font-weight:600}
+.banner small{display:block;font-weight:400;color:var(--muted);margin-top:2px}
+#sPlot{width:100%;aspect-ratio:1/1;display:block;touch-action:manipulation}
+.namesList{margin:8px 0 0;padding:0;list-style:none}
+.namesList li{padding:6px 0;border-bottom:1px solid var(--line)}
+.linkbtn{background:none;border:none;color:var(--navy);text-decoration:underline;padding:0;cursor:pointer;font-weight:600}
+
+/* ---------- instructor (projector) ---------- */
+#instructor{display:grid;grid-template-columns:minmax(0,1fr) 420px;gap:16px;padding:14px 16px;height:100vh}
+#instructor .left{display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:10px;min-width:0;min-height:0}
+.topbar{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap}
+.topbar h1{margin:0;font-size:1.7rem;letter-spacing:-.01em}
+.topbar .sub{color:var(--muted)}
+.plotWrap{position:relative;background:var(--card);border:1px solid var(--line);border-radius:12px;min-height:0;overflow:hidden}
+.plotWrap canvas,.plotWrap svg{position:absolute;inset:0;width:100%;height:100%}
+.stepbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.stepbar .status{font-size:1.15rem;font-weight:600}
+.right{display:flex;flex-direction:column;gap:12px;overflow-y:auto;min-height:0;padding-right:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.panel h2{font-size:.95rem;margin:0 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.join{display:grid;grid-template-columns:132px minmax(0,1fr);gap:12px;align-items:center}
+#qr{width:132px;height:132px;background:#fff}
+#qr img,#qr canvas{width:132px!important;height:132px!important}
+.count{font-family:var(--mono);font-size:2.6rem;font-weight:600;line-height:1}
+.url{font-family:var(--mono);font-size:.78rem;word-break:break-all;color:var(--muted)}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:right;font-size:.9rem}
+th:first-child,td:first-child{text-align:left}
+th{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+td.nm{text-align:left;font-size:.82rem;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.metric .v{font-family:var(--mono);font-size:1.45rem;font-weight:600}
+#spark,#elbowSvg,#startsSvg{width:100%;height:auto;display:block}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--card);padding:6px 11px;cursor:pointer;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--navy);color:#fff}
+.hint{font-size:.85rem;color:var(--muted);margin:6px 0 0}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 14px;border-radius:8px;font-size:.92rem;opacity:0;transition:opacity .25s;pointer-events:none}
+.toast.on{opacity:1}
+.mode{font-size:.75rem;padding:2px 8px;border-radius:99px;background:var(--soft);color:var(--muted);font-weight:600}
+.mode.live{background:#E3F2EF;color:var(--ok)}
+@media (max-width:1100px){#instructor{grid-template-columns:minmax(0,1fr);height:auto}.plotWrap{height:70vh}}
+</style>
 </head>
 <body>
-    <div class="video-container">
-        <input type="text" id="videoUrl" placeholder="https://www.youtube.com/watch?v=yLWXJ22LUEc">
-        <button onclick="embedVideo()">Embed Video</button>
-        <div id="videoPlayer"></div>
+
+<!-- ======================= STUDENT ======================= -->
+<main id="student" hidden>
+  <div class="label">MARK 3620 · Customer Analytics</div>
+  <h1>Creator or lurker?</h1>
+  <p class="lede">Two quick questions. Answers are anonymous and only shown as a dot.</p>
+
+  <section id="sForm" class="card">
+    <div class="q">
+      <div class="qt">How many times a week do you post?</div>
+      <div class="qs">Instagram, Xiaohongshu, Threads… stories and reposts count.</div>
+      <div><span class="val" id="vPosts">0</span><span class="unit">posts / week</span></div>
+      <input type="range" id="inPosts" min="0" max="20" step="1" value="0" aria-label="Posts per week">
+      <div class="ticks"><span>0</span><span>5</span><span>10</span><span>15</span><span>20+</span></div>
     </div>
-    <script src="script.js"></script>
+    <div class="q">
+      <div class="qt">How many hours a day do you spend browsing those apps?</div>
+      <div class="qs">Scrolling, watching, reading comments. Your best guess.</div>
+      <div><span class="val" id="vHours">0</span><span class="unit">hours / day</span></div>
+      <input type="range" id="inHours" min="0" max="8" step="0.5" value="0" aria-label="Hours per day browsing">
+      <div class="ticks"><span>0</span><span>2</span><span>4</span><span>6</span><span>8+</span></div>
+    </div>
+    <div class="q" style="margin-bottom:12px">
+      <div class="qt">Nickname <span class="muted" style="font-weight:400">(optional)</span></div>
+      <input class="text" id="inNick" maxlength="16" placeholder="Optional" autocomplete="off">
+    </div>
+    <button class="btn primary big" id="submitBtn">Submit</button>
+    <p class="hint" id="formMsg"></p>
+  </section>
+
+  <section id="sLive" hidden>
+    <div class="banner" id="sBanner">Thanks! Watch the screen.</div>
+    <div class="card" style="padding:10px">
+      <svg id="sPlot" viewBox="0 0 400 400" role="img" aria-label="Everyone's answers; yours has a ring"></svg>
+    </div>
+    <div class="card" id="sNameCard" hidden>
+      <div class="qt" id="sNameQ" style="font-weight:600;margin-bottom:8px">Name your segment</div>
+      <input class="text" id="inSeg" maxlength="24" placeholder="e.g. Silent scrollers" autocomplete="off">
+      <button class="btn primary big" id="segBtn" style="margin-top:10px">Send name</button>
+      <p class="hint" id="segMsg"></p>
+    </div>
+    <div class="card" id="sReveal" hidden></div>
+    <p class="hint">You answered <b id="mine"></b>. <button class="linkbtn" id="editBtn">Change my answer</button></p>
+  </section>
+  <p class="hint" id="sMode" style="margin-top:20px"></p>
+</main>
+
+<!-- ======================= INSTRUCTOR ======================= -->
+<div id="instructor" hidden>
+  <div class="left">
+    <div class="topbar">
+      <h1>Creators vs. lurkers</h1>
+      <span class="sub">class <b id="clsLbl" class="mono"></b></span>
+      <span class="mode" id="modeLbl"></span>
+    </div>
+    <div class="plotWrap" id="plotWrap">
+      <canvas id="regions"></canvas>
+      <svg id="plot" role="img" aria-label="Class answers with cluster centres"></svg>
+    </div>
+    <div class="stepbar">
+      <button class="btn primary" id="stepBtn" style="min-width:150px;font-size:1.05rem">Assign</button>
+      <button class="btn" id="autoBtn" aria-pressed="false">Auto-run</button>
+      <span class="status" id="stepStatus">Choose a start.</span>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="panel" id="joinPanel">
+      <div class="join">
+        <div id="qr" aria-label="QR code to join"></div>
+        <div>
+          <div class="label">Answers in</div>
+          <div class="count" id="nCount">0</div>
+          <div class="url" id="joinUrl"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="btn" id="lockBtn" aria-pressed="false">Lock answers</button>
+            <button class="btn" id="qrBtn" aria-pressed="true">Hide QR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Run k-means</h2>
+      <div class="row" style="margin-bottom:8px">
+        <span class="label" style="margin-right:2px">K</span>
+        <div class="seg" id="kSeg"></div>
+        <button class="btn" id="stdBtn" aria-pressed="false" title="Measure distance in standard deviations">Standardize</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="randBtn">Random start</button>
+        <button class="btn" id="clickBtn" aria-pressed="false">Click to place</button>
+        <button class="btn" id="resetBtn">Reset</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="regBtn" aria-pressed="true">Regions</button>
+        <button class="btn" id="lineBtn" aria-pressed="true">Lines</button>
+        <button class="btn" id="nickBtn" aria-pressed="false">Nicknames</button>
+      </div>
+      <p class="hint" id="stdHint" hidden>Distances are now measured in standard deviations, so posts and hours count equally.</p>
+    </div>
+
+    <div class="panel">
+      <div class="metrics">
+        <div class="metric"><div class="label">Round</div><div class="v" id="mRound">–</div></div>
+        <div class="metric"><div class="label">Switched</div><div class="v" id="mSwitch">–</div></div>
+        <div class="metric"><div class="label">Total sq. distance</div><div class="v" id="mWss">–</div></div>
+      </div>
+      <svg id="spark" viewBox="0 0 390 70" aria-label="Total squared distance by round"></svg>
+    </div>
+
+    <div class="panel">
+      <h2>Segment profile</h2>
+      <table><thead><tr><th>Segment</th><th>n</th><th>%</th><th>Posts/wk</th><th>Hours/day</th><th style="text-align:left">Name</th></tr></thead><tbody id="prof"></tbody></table>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="askNamesBtn" aria-pressed="false">Ask phones to name their segment</button>
+        <button class="btn" id="showNamesBtn" aria-pressed="false">Show names</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Same data, different starts</h2>
+      <div class="row"><button class="btn" id="startsBtn">Run 20 random starts</button><span class="hint" id="startsMsg" style="margin:0"></span></div>
+      <svg id="startsSvg" viewBox="0 0 390 10" aria-label="Final total squared distance from 20 random starts"></svg>
+      <p class="hint">Click a bar to show that answer on the map.</p>
+    </div>
+
+    <div class="panel">
+      <h2>How many segments?</h2>
+      <button class="btn" id="elbowBtn">Draw elbow (K = 1 to 8)</button>
+      <svg id="elbowSvg" viewBox="0 0 390 10" aria-label="Elbow plot"></svg>
+    </div>
+
+    <div class="panel">
+      <h2>Session</h2>
+      <div class="row">
+        <button class="btn" id="demoBtn">Add 80 demo students</button>
+        <button class="btn warn" id="clearBtn">Clear all answers</button>
+      </div>
+      <p class="hint">Demo students are saved to this class like real answers. Use a rehearsal class (e.g. <span class="mono">?class=test</span>) or clear before the lecture.</p>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+/* ================= config ================= */
+const P = new URLSearchParams(location.search);
+const CFG = {
+  instructorCode: "3620",
+  classId: (P.get("class") || "mark3620").replace(/[^a-z0-9_-]/gi, "").slice(0, 40) || "mark3620",
+  firebase: window.KM_FIREBASE_CONFIG || null,
+  X: { key: "posts", label: "Posts per week", max: 20, step: 1, top: "20+" },
+  Y: { key: "hours", label: "Hours browsing per day", max: 8, step: 0.5, top: "8+" }
+};
+const COLORS = ["#004479", "#D19809", "#C00000", "#1F7A6E", "#7A4FA0", "#8A5A2B"];
+const CNAMES = ["Blue", "Gold", "Red", "Teal", "Purple", "Brown"];
+const $ = id => document.getElementById(id);
+const isInstructor = P.get("instructor") === CFG.instructorCode;
+const fmt1 = v => (Math.round(v * 10) / 10).toFixed(1);
+const fmtN = v => { const r = Math.round(v * 10) / 10; return Number.isInteger(r) ? String(r) : r.toFixed(1); };
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("on"), 2200); }
+function clean(r) { // validate a response record
+  if (!r || typeof r !== "object") return null;
+  const x = Number(r.posts), y = Number(r.hours);
+  if (!isFinite(x) || !isFinite(y)) return null;
+  return { posts: Math.max(0, Math.min(CFG.X.max, x)), hours: Math.max(0, Math.min(CFG.Y.max, y)),
+           nick: typeof r.nick === "string" ? r.nick.slice(0, 16) : "", seg: typeof r.seg === "string" ? r.seg.slice(0, 24) : "", t: r.t || 0, demo: !!r.demo };
+}
+
+/* ================= store ================= */
+function makeStore() {
+  const base = "classes/" + CFG.classId + "/kmeans";
+  if (CFG.firebase && window.firebase) {
+    try {
+      firebase.initializeApp(CFG.firebase);
+      const db = firebase.database();
+      const R = db.ref(base + "/responses"), S = db.ref(base + "/state");
+      return {
+        live: true, label: "live",
+        onResponses(cb) { R.on("value", s => cb(s.val() || {}), e => console.warn(e)); },
+        onState(cb) { S.on("value", s => cb(s.val() || null), e => console.warn(e)); },
+        setResponse(uid, r) { return R.child(uid).set(r); },
+        patchResponse(uid, p) { return R.child(uid).update(p); },
+        addMany(obj) { return R.update(obj); },
+        setState(st) { return S.set(st); },
+        clear() { return Promise.all([R.remove(), S.remove()]); }
+      };
+    } catch (e) { console.warn("Firebase unavailable, using local mode", e); }
+  }
+  // Local fallback: localStorage + BroadcastChannel, so tabs on one computer share answers.
+  const KR = "km_" + CFG.classId + "_responses", KS = "km_" + CFG.classId + "_state";
+  const read = k => { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch (e) { return null; } };
+  const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
+  let bc = null; try { bc = new BroadcastChannel("km_" + CFG.classId); } catch (e) {}
+  const subs = { r: [], s: [] };
+  const emitR = () => subs.r.forEach(f => f(read(KR) || {}));
+  const emitS = () => subs.s.forEach(f => f(read(KS)));
+  const notify = w => { if (bc) bc.postMessage(w); };
+  if (bc) bc.onmessage = e => { if (e.data === "r") emitR(); if (e.data === "s") emitS(); };
+  window.addEventListener("storage", e => { if (e.key === KR) emitR(); if (e.key === KS) emitS(); });
+  return {
+    live: false, label: "this computer only",
+    onResponses(cb) { subs.r.push(cb); cb(read(KR) || {}); },
+    onState(cb) { subs.s.push(cb); cb(read(KS)); },
+    setResponse(uid, r) { const all = read(KR) || {}; all[uid] = r; write(KR, all); emitR(); notify("r"); return Promise.resolve(); },
+    patchResponse(uid, p) { const all = read(KR) || {}; all[uid] = Object.assign(all[uid] || {}, p); write(KR, all); emitR(); notify("r"); return Promise.resolve(); },
+    addMany(obj) { const all = read(KR) || {}; Object.assign(all, obj); write(KR, all); emitR(); notify("r"); return Promise.resolve(); },
+    setState(st) { write(KS, st); emitS(); notify("s"); return Promise.resolve(); },
+    clear() { write(KR, {}); write(KS, null); emitR(); emitS(); notify("r"); notify("s"); return Promise.resolve(); }
+  };
+}
+const store = makeStore();
+
+/* ================= k-means core ================= */
+function scaleOf(pts, std) {
+  if (!std || pts.length < 2) return { mx: 0, my: 0, sx: 1, sy: 1 };
+  const n = pts.length, mx = pts.reduce((s, p) => s + p.x, 0) / n, my = pts.reduce((s, p) => s + p.y, 0) / n;
+  const sx = Math.sqrt(pts.reduce((s, p) => s + (p.x - mx) ** 2, 0) / (n - 1)) || 1;
+  const sy = Math.sqrt(pts.reduce((s, p) => s + (p.y - my) ** 2, 0) / (n - 1)) || 1;
+  return { mx, my, sx, sy };
+}
+const d2 = (p, c, sc) => ((p.x - c[0]) / sc.sx) ** 2 + ((p.y - c[1]) / sc.sy) ** 2;
+function nearest(p, C, sc) { let b = 0, bd = Infinity; C.forEach((c, k) => { const d = d2(p, c, sc); if (d < bd - 1e-12) { bd = d; b = k; } }); return b; }
+function assignAll(pts, C, sc) { return pts.map(p => nearest(p, C, sc)); }
+function means(pts, a, C) { return C.map((c, k) => { const m = pts.filter((p, i) => a[i] === k); return m.length ? [m.reduce((s, p) => s + p.x, 0) / m.length, m.reduce((s, p) => s + p.y, 0) / m.length] : c.slice(); }); }
+function wss(pts, a, C, sc) { return pts.reduce((s, p, i) => s + d2(p, C[a[i]], sc), 0); }
+function runKmeans(pts, C0, sc) { let C = C0.map(c => c.slice()), a = null; for (let it = 0; it < 200; it++) { const na = assignAll(pts, C, sc); if (a && na.every((v, i) => v === a[i])) break; a = na; C = means(pts, a, C); } a = assignAll(pts, C, sc); return { C, a, w: wss(pts, a, C, sc) }; }
+function randomStart(pts, K) { const idx = new Set(); let guard = 0; while (idx.size < Math.min(K, pts.length) && guard++ < 1000) idx.add(Math.floor(Math.random() * pts.length)); return [...idx].map(i => [pts[i].x, pts[i].y]); }
+
+/* ================= shared drawing helpers ================= */
+const NS = "http://www.w3.org/2000/svg";
+function el(t, a, parent) { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; }
+function jitter(uid) { let h = 2166136261; for (const ch of uid) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return [((h & 1023) / 1023 - .5), (((h >>> 10) & 1023) / 1023 - .5)]; }
+
+/* ======================================================================
+   STUDENT VIEW
+   ====================================================================== */
+function student() {
+  $("student").hidden = false;
+  $("sMode").textContent = store.live ? "" : "Offline mode: answers are not shared with the class screen. Ask your instructor.";
+  let uid = (P.get("sid") || "").replace(/[^a-z0-9]/gi, "").slice(0, 24) || null; if (!uid) { try { uid = localStorage.getItem("km_uid"); } catch (e) {} }
+  if (!uid) { uid = "u" + Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); try { localStorage.setItem("km_uid", uid); } catch (e) {} }
+  let all = {}, st = null, me = null, segSent = false, editing = false;
+  const inP = $("inPosts"), inH = $("inHours");
+  const showVals = () => { $("vPosts").textContent = inP.value === String(CFG.X.max) ? CFG.X.top : inP.value; $("vHours").textContent = inH.value === String(CFG.Y.max) ? CFG.Y.top : fmtN(+inH.value); };
+  inP.oninput = inH.oninput = showVals; showVals();
+
+  $("submitBtn").onclick = () => {
+    if (st && st.locked) { $("formMsg").textContent = "Answers are closed for now."; return; }
+    const r = { posts: +inP.value, hours: +inH.value, nick: $("inNick").value.trim().slice(0, 16), t: Date.now() };
+    if (me && me.seg) r.seg = me.seg;
+    $("submitBtn").disabled = true;
+    store.setResponse(uid, r).then(() => { editing = false; $("submitBtn").disabled = false; render(); }).catch(() => { $("submitBtn").disabled = false; $("formMsg").textContent = "Could not send. Check your connection and try again."; });
+  };
+  $("editBtn").onclick = () => { if (st && st.locked) { toast("Answers are locked right now."); return; } editing = true; render(); };
+  $("segBtn").onclick = () => {
+    const v = $("inSeg").value.trim().slice(0, 24); if (!v) { $("segMsg").textContent = "Type a name first."; return; }
+    store.patchResponse(uid, { seg: v }).then(() => { segSent = true; $("segMsg").textContent = "Sent. Watch the screen."; });
+  };
+
+  store.onResponses(v => { all = v || {}; me = clean(all[uid]); render(); });
+  store.onState(v => { st = v; render(); });
+
+  function myCluster() {
+    if (!st || !st.assignCenters || !me) return -1;
+    return nearest({ x: me.posts, y: me.hours }, st.assignCenters, st.scale || { sx: 1, sy: 1 });
+  }
+  function render() {
+    const answered = !!me && !editing;
+    $("sForm").hidden = answered; $("sLive").hidden = !answered;
+    if (!answered) {
+      if (me) { inP.value = me.posts; inH.value = me.hours; $("inNick").value = me.nick || ""; showVals(); }
+      $("submitBtn").textContent = me ? "Update my answer" : "Submit";
+      $("formMsg").textContent = st && st.locked ? "Answers are closed for now." : "";
+      return;
+    }
+    $("mine").textContent = `${me.posts === CFG.X.max ? CFG.X.top : me.posts} posts a week, ${me.hours === CFG.Y.max ? CFG.Y.top : fmtN(me.hours)} hours a day`;
+    const k = myCluster();
+    const C = st && st.centers;
+    let msg = "Thanks! Your dot is the one with the ring. Watch the screen.", sub = "";
+    if (st && st.assignCenters && k >= 0) {
+      const cc = st.assignCenters[k];
+      msg = `<span class="swatch" style="background:${COLORS[k]}"></span>You're in ${CNAMES[k]}`;
+      sub = `Round ${st.round || 1}. ${CNAMES[k]}'s centre: ${fmtN(cc[0])} posts a week, ${fmtN(cc[1])} hours a day.` + (st.done ? " Nobody switched, so k-means has stopped." : "");
+    } else if (C && C.length) { msg = "The starting centres are on the screen."; sub = "Next: each dot joins its nearest centre."; }
+    $("sBanner").innerHTML = msg + (sub ? `<small>${sub}</small>` : "");
+    // name card
+    const askNames = st && st.askNames && k >= 0;
+    $("sNameCard").hidden = !askNames;
+    if (askNames) { $("sNameQ").innerHTML = `<span class="swatch" style="background:${COLORS[k]}"></span>Name your segment: ${CNAMES[k]}`; if (me.seg && !$("inSeg").value) $("inSeg").value = me.seg; if (segSent || me.seg) $("segMsg").textContent = "Sent. You can change it."; }
+    // reveal
+    const rv = st && st.showNames && st.topNames;
+    $("sReveal").hidden = !rv;
+    if (rv) $("sReveal").innerHTML = `<div class="qt" style="font-weight:600">The class named its segments</div><ul class="namesList">` +
+      st.topNames.map((n, i) => `<li><span class="swatch" style="background:${COLORS[i]}"></span><b>${CNAMES[i]}:</b> ${n ? escapeHtml(n) : "<span class='muted'>no name yet</span>"}</li>`).join("") + "</ul>";
+    drawPhone(k);
+  }
+  function drawPhone(k) {
+    const svg = $("sPlot"); svg.innerHTML = "";
+    const L = 34, B = 362, W = 352, H = 340;
+    const sx = x => L + x / CFG.X.max * W, sy = y => B - y / CFG.Y.max * H;
+    for (let i = 0; i <= 4; i++) { const x = CFG.X.max * i / 4, y = CFG.Y.max * i / 4;
+      el("line", { x1: sx(x), x2: sx(x), y1: sy(0), y2: sy(CFG.Y.max), stroke: "#E9EEF3" }, svg); el("line", { x1: sx(0), x2: sx(CFG.X.max), y1: sy(y), y2: sy(y), stroke: "#E9EEF3" }, svg);
+      el("text", { x: sx(x), y: B + 16, "text-anchor": "middle", "font-size": 12, fill: "#5C6B7E" }, svg).textContent = i === 4 ? CFG.X.top : fmtN(x);
+      el("text", { x: L - 6, y: sy(y) + 4, "text-anchor": "end", "font-size": 12, fill: "#5C6B7E" }, svg).textContent = i === 4 ? CFG.Y.top : fmtN(y); }
+    el("text", { x: sx(CFG.X.max / 2), y: 396, "text-anchor": "middle", "font-size": 12.5, fill: "#004479", "font-weight": 600 }, svg).textContent = "posts per week →";
+    el("text", { x: 12, y: sy(CFG.Y.max / 2), "text-anchor": "middle", "font-size": 12.5, fill: "#004479", "font-weight": 600, transform: `rotate(-90 12 ${sy(CFG.Y.max / 2)})` }, svg).textContent = "hours a day →";
+    const pts = Object.entries(all).map(([u, r]) => [u, clean(r)]).filter(([u, r]) => r);
+    const AC = st && st.assignCenters, sc = (st && st.scale) || { sx: 1, sy: 1 };
+    pts.forEach(([u, r]) => { if (u === uid) return; const j = jitter(u); const kk = AC ? nearest({ x: r.posts, y: r.hours }, AC, sc) : -1;
+      el("circle", { cx: sx(r.posts) + j[0] * 8, cy: sy(r.hours) + j[1] * 8, r: 4.2, fill: kk >= 0 ? COLORS[kk] : "#8796A8", opacity: .75 }, svg); });
+    (st && st.centers || []).forEach((c, i) => { const g = el("g", { transform: `translate(${sx(c[0])},${sy(c[1])})` }, svg);
+      el("path", { d: "M0,-11 L11,0 L0,11 L-11,0 Z", fill: COLORS[i], stroke: "#fff", "stroke-width": 2 }, g); });
+    if (me) { const j = jitter(uid); const x = sx(me.posts) + j[0] * 8, y = sy(me.hours) + j[1] * 8;
+      el("circle", { cx: x, cy: y, r: 11, fill: "none", stroke: "#14243A", "stroke-width": 2.5 }, svg);
+      el("circle", { cx: x, cy: y, r: 5.5, fill: k >= 0 ? COLORS[k] : "#14243A" }, svg); }
+  }
+}
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+/* ======================================================================
+   INSTRUCTOR VIEW
+   ====================================================================== */
+function instructor() {
+  $("instructor").hidden = false;
+  $("clsLbl").textContent = CFG.classId;
+  $("modeLbl").textContent = store.live ? "live" : "this computer only";
+  $("modeLbl").classList.toggle("live", store.live);
+  const joinUrl = location.origin + location.pathname + (CFG.classId === "mark3620" ? "" : "?class=" + encodeURIComponent(CFG.classId));
+  $("joinUrl").textContent = joinUrl.replace(/^https?:\/\//, "");
+  try { new QRCode($("qr"), { text: joinUrl, width: 264, height: 264, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { $("qr").textContent = "QR unavailable"; }
+
+  let raw = {}, pts = [], uids = [];
+  const S = { K: 3, std: false, C: null, prevC: null, a: null, prevA: null, assignC: null, phase: "start", round: 0, done: false, wssHist: [], locked: false,
+              askNames: false, showNames: false, placing: false, regions: true, lines: true, nicks: false, auto: null, label: "" };
+  let sc = { mx: 0, my: 0, sx: 1, sy: 1 };
+
+  // K buttons
+  for (let k = 2; k <= 6; k++) { const b = document.createElement("button"); b.textContent = k; b.setAttribute("aria-pressed", String(k === S.K)); b.onclick = () => { S.K = k; [...$("kSeg").children].forEach(x => x.setAttribute("aria-pressed", String(x === b))); resetRun("K = " + k + ". Choose a start."); }; $("kSeg").appendChild(b); }
+
+  let writeOk = null;
+  function publish() {
+    const top = topNames();
+    const pr = store.setState({ locked: S.locked, K: S.K, std: S.std, scale: { sx: sc.sx, sy: sc.sy }, centers: S.C || null, assignCenters: S.a ? (S.assignC || null) : null,
+      round: S.round, done: S.done, askNames: S.askNames, showNames: S.showNames, topNames: S.showNames ? top : null, t: Date.now() });
+    if (store.live && writeOk === null) { writeOk = "pending";
+      pr.then(() => { writeOk = true; $("modeLbl").textContent = "live · connected"; })
+        .catch(e => { writeOk = false; $("modeLbl").textContent = "Firebase refused the write: " + (e && e.code ? e.code : "check database rules"); $("modeLbl").classList.remove("live"); $("modeLbl").style.color = "#C00000"; }); }
+  }
+
+  function resetRun(msg) {
+    stopAuto(); S.C = null; S.prevC = null; S.a = null; S.prevA = null; S.assignC = null; S.phase = "start"; S.round = 0; S.done = false; S.wssHist = []; S.placing = false; S.label = "";
+    $("clickBtn").setAttribute("aria-pressed", "false"); S.askNames = false; S.showNames = false; $("askNamesBtn").setAttribute("aria-pressed", "false"); $("showNamesBtn").setAttribute("aria-pressed", "false");
+    $("stepStatus").textContent = msg || "Choose a start."; updateButtons(); draw(); profile(); publish();
+  }
+  function begin(C, label) {
+    stopAuto(); S.startC = C.map(c => c.slice()); S.C = C.map(c => c.slice()); S.prevC = null; S.a = null; S.prevA = null; S.assignC = null; S.phase = "assign"; S.round = 0; S.done = false; S.wssHist = []; S.label = label;
+    $("stepStatus").textContent = label + ". Next: every dot joins its nearest centre."; updateButtons(); draw(); profile(); publish();
+  }
+  function step() {
+    if (!S.C || S.done || !pts.length) return;
+    if (S.phase === "assign") {
+      const a = assignAll(pts, S.C, sc);
+      const sw = S.a ? a.reduce((s, v, i) => s + (v !== S.a[i] ? 1 : 0), 0) : null;
+      S.prevA = S.a; S.a = a; S.assignC = S.C.map(c => c.slice()); S.round++;
+      S.wssHist.push(wss(pts, a, S.C, sc));
+      if (sw === 0) { S.done = true; $("stepStatus").textContent = `Round ${S.round}: nobody switched. k-means has converged.`; stopAuto(); }
+      else { S.phase = "update"; $("stepStatus").textContent = sw === null ? `Round ${S.round}: every dot joined its nearest centre. Next: move each centre to the average of its dots.` : `Round ${S.round}: ${sw} dot${sw === 1 ? "" : "s"} switched. Next: move the centres.`; }
+      $("mSwitch").textContent = sw === null ? "all" : sw;
+    } else {
+      const N = means(pts, S.a, S.C);
+      const empty = S.C.filter((c, k) => !S.a.includes(k)).length;
+      S.prevC = S.C; animateCentres(S.C, N); S.C = N; S.phase = "assign";
+      S.wssHist.push(wss(pts, S.a, S.C, sc));
+      $("stepStatus").textContent = `Round ${S.round}: each centre moved to the average of its dots.` + (empty ? ` ${empty} centre${empty > 1 ? "s have" : " has"} no dots and stays put.` : "") + " Next: re-assign.";
+    }
+    updateButtons(); draw(); profile(); publish();
+  }
+  function updateButtons() {
+    const b = $("stepBtn");
+    b.disabled = !S.C || S.C.length < S.K || S.done || !pts.length;
+    b.textContent = S.done ? "Converged" : S.phase === "update" ? "Move centres" : "Assign";
+    $("autoBtn").disabled = !S.C || S.C.length < S.K || S.done;
+    $("mRound").textContent = S.round || "–";
+    if (!S.a) $("mSwitch").textContent = "–";
+    const w = S.a && S.C ? wss(pts, S.a, S.C, sc) : null; $("mWss").textContent = w === null ? "–" : (w >= 100 ? Math.round(w) : fmt1(w));
+    drawSpark();
+  }
+  function stopAuto() { if (S.auto) { clearInterval(S.auto); S.auto = null; } $("autoBtn").setAttribute("aria-pressed", "false"); $("autoBtn").textContent = "Auto-run"; }
+  $("autoBtn").onclick = () => { if (S.auto) { stopAuto(); return; } $("autoBtn").setAttribute("aria-pressed", "true"); $("autoBtn").textContent = "Pause"; S.auto = setInterval(() => { if (S.done) stopAuto(); else step(); }, 1100); };
+  $("stepBtn").onclick = step;
+  $("randBtn").onclick = () => { if (pts.length < S.K) { toast(`Need at least ${S.K} answers.`); return; } begin(randomStart(pts, S.K), "Random start"); };
+  $("resetBtn").onclick = () => resetRun();
+  $("clickBtn").onclick = () => { stopAuto(); S.placing = !S.placing; $("clickBtn").setAttribute("aria-pressed", String(S.placing)); if (S.placing) { S.C = []; S.a = null; S.assignC = null; S.done = false; S.round = 0; S.wssHist = []; S.phase = "start"; $("stepStatus").textContent = `Click the map to place ${S.K} centres.`; updateButtons(); draw(); publish(); } else resetRun(); };
+  $("stdBtn").onclick = () => { S.std = !S.std; $("stdBtn").setAttribute("aria-pressed", String(S.std)); $("stdHint").hidden = !S.std; sc = scaleOf(pts, S.std); if (S.startC && S.C && S.C.length === S.K) begin(S.startC, (S.label || "Start").replace(" (standardized)", "") + (S.std ? " (standardized)" : "")); else { draw(); publish(); } };
+  $("regBtn").onclick = () => { S.regions = !S.regions; $("regBtn").setAttribute("aria-pressed", String(S.regions)); draw(); };
+  $("lineBtn").onclick = () => { S.lines = !S.lines; $("lineBtn").setAttribute("aria-pressed", String(S.lines)); draw(); };
+  $("nickBtn").onclick = () => { S.nicks = !S.nicks; $("nickBtn").setAttribute("aria-pressed", String(S.nicks)); draw(); };
+  $("lockBtn").onclick = () => { S.locked = !S.locked; $("lockBtn").setAttribute("aria-pressed", String(S.locked)); $("lockBtn").textContent = S.locked ? "Answers locked" : "Lock answers"; publish(); };
+  $("qrBtn").onclick = () => { const q = $("qr"); q.hidden = !q.hidden; $("qrBtn").textContent = q.hidden ? "Show QR" : "Hide QR"; $("qrBtn").setAttribute("aria-pressed", String(!q.hidden)); };
+  $("askNamesBtn").onclick = () => { if (!S.a) { toast("Run k-means first."); return; } S.askNames = !S.askNames; $("askNamesBtn").setAttribute("aria-pressed", String(S.askNames)); publish(); };
+  $("showNamesBtn").onclick = () => { S.showNames = !S.showNames; $("showNamesBtn").setAttribute("aria-pressed", String(S.showNames)); profile(); publish(); };
+  let clearArm = 0;
+  $("clearBtn").onclick = () => { if (Date.now() - clearArm > 4000) { clearArm = Date.now(); $("clearBtn").textContent = "Click again to clear"; setTimeout(() => $("clearBtn").textContent = "Clear all answers", 4000); return; }
+    clearArm = 0; $("clearBtn").textContent = "Clear all answers"; store.clear().then(() => { resetRun("Answers cleared."); toast("All answers cleared."); }); };
+  $("demoBtn").onclick = () => { const obj = {}; demoData(80).forEach((r, i) => { obj["demo" + Date.now().toString(36) + i] = r; }); store.addMany(obj).then(() => toast("Added 80 demo students.")); };
+
+  // ---------- main plot ----------
+  const wrap = $("plotWrap"), svg = $("plot"), cv = $("regions");
+  let G = null; // geometry
+  function geom() { const w = wrap.clientWidth, h = wrap.clientHeight; const L = 70, R = 24, T = 20, B = 58; return { w, h, L, R, T, B, sx: x => L + x / CFG.X.max * (w - L - R), sy: y => h - B - y / CFG.Y.max * (h - T - B), ix: px => (px - L) / (w - L - R) * CFG.X.max, iy: py => (h - B - py) / (h - T - B) * CFG.Y.max }; }
+  let anim = null;
+  function animateCentres(from, to) {
+    const t0 = performance.now(), D = 650;
+    anim = { from: from.map(c => c.slice()), to: to.map(c => c.slice()), t0, D };
+    const tick = now => { if (!anim) return; const u = Math.min(1, (now - anim.t0) / anim.D); draw(u); if (u < 1) requestAnimationFrame(tick); else { anim = null; draw(); } };
+    requestAnimationFrame(tick);
+  }
+  function draw(u) {
+    G = geom(); const { w, h } = G; if (!w || !h) return;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.innerHTML = "";
+    // centres to show (animated)
+    let C = S.C;
+    if (anim && u !== undefined && u < 1) { const e = 1 - Math.pow(1 - u, 3); C = anim.to.map((c, k) => [anim.from[k][0] + (c[0] - anim.from[k][0]) * e, anim.from[k][1] + (c[1] - anim.from[k][1]) * e]); }
+    drawRegions(C);
+    // grid + axes
+    for (let x = 0; x <= CFG.X.max; x += 2) { el("line", { x1: G.sx(x), x2: G.sx(x), y1: G.sy(0), y2: G.sy(CFG.Y.max), stroke: "#E9EEF3" }, svg);
+      el("text", { x: G.sx(x), y: G.sy(0) + 22, "text-anchor": "middle", "font-size": 15, fill: "#5C6B7E", "font-family": "IBM Plex Mono, monospace" }, svg).textContent = x === CFG.X.max ? CFG.X.top : x; }
+    for (let y = 0; y <= CFG.Y.max; y += 1) { el("line", { x1: G.sx(0), x2: G.sx(CFG.X.max), y1: G.sy(y), y2: G.sy(y), stroke: "#E9EEF3" }, svg);
+      el("text", { x: G.sx(0) - 10, y: G.sy(y) + 5, "text-anchor": "end", "font-size": 15, fill: "#5C6B7E", "font-family": "IBM Plex Mono, monospace" }, svg).textContent = y === CFG.Y.max ? CFG.Y.top : y; }
+    el("text", { x: G.sx(CFG.X.max / 2), y: h - 12, "text-anchor": "middle", "font-size": 17, "font-weight": 700, fill: "#004479" }, svg).textContent = "Posts per week  →  (creators)";
+    el("text", { x: 22, y: G.sy(CFG.Y.max / 2), "text-anchor": "middle", "font-size": 17, "font-weight": 700, fill: "#004479", transform: `rotate(-90 22 ${G.sy(CFG.Y.max / 2)})` }, svg).textContent = "Hours browsing per day  →  (lurkers)";
+    // lines
+    const AC = S.assignC;
+    if (S.a && S.lines && C) pts.forEach((p, i) => { const k = S.a[i]; const j = jitter(p.u); el("line", { x1: G.sx(p.x) + j[0] * 10, y1: G.sy(p.y) + j[1] * 10, x2: G.sx(C[k][0]), y2: G.sy(C[k][1]), stroke: COLORS[k], "stroke-width": 1.2, opacity: .28 }, svg); });
+    // points
+    const switched = new Set(); if (S.a && S.prevA) S.a.forEach((k, i) => { if (S.prevA[i] !== undefined && S.prevA[i] !== k) switched.add(i); });
+    pts.forEach((p, i) => { const j = jitter(p.u); const x = G.sx(p.x) + j[0] * 10, y = G.sy(p.y) + j[1] * 10; const k = S.a ? S.a[i] : -1;
+      if (switched.has(i) && S.phase === "update") el("circle", { cx: x, cy: y, r: 11, fill: "none", stroke: COLORS[k], "stroke-width": 2.5 }, svg);
+      el("circle", { cx: x, cy: y, r: 6.5, fill: k >= 0 ? COLORS[k] : "#6B7B8E", stroke: "#fff", "stroke-width": 1.4, opacity: .92 }, svg);
+      if (S.nicks && p.nick) el("text", { x: x + 9, y: y - 8, "font-size": 12, fill: "#14243A" }, svg).textContent = p.nick; });
+    // trails
+    if (S.prevC && S.C && !anim) S.C.forEach((c, k) => { const pc = S.prevC[k]; if (!pc) return; el("line", { x1: G.sx(pc[0]), y1: G.sy(pc[1]), x2: G.sx(c[0]), y2: G.sy(c[1]), stroke: COLORS[k], "stroke-width": 2, "stroke-dasharray": "5 5", opacity: .7 }, svg);
+      el("circle", { cx: G.sx(pc[0]), cy: G.sy(pc[1]), r: 6, fill: "none", stroke: COLORS[k], "stroke-width": 2, opacity: .6 }, svg); });
+    // centres
+    if (C) C.forEach((c, k) => { const g = el("g", { transform: `translate(${G.sx(c[0])},${G.sy(c[1])})` }, svg);
+      el("path", { d: "M0,-19 L19,0 L0,19 L-19,0 Z", fill: COLORS[k], stroke: "#fff", "stroke-width": 3 }, g);
+      const lab = el("text", { x: 24, y: -14, "font-size": 15, "font-weight": 700, fill: COLORS[k], "font-family": "IBM Plex Mono, monospace", "paint-order": "stroke", stroke: "#fff", "stroke-width": 4 }, g);
+      lab.textContent = `${fmtN(c[0])}, ${fmtN(c[1])}`; });
+    if (!pts.length) el("text", { x: w / 2, y: h / 2, "text-anchor": "middle", "font-size": 22, fill: "#5C6B7E" }, svg).textContent = "Waiting for answers… scan the QR code";
+  }
+  function drawRegions(C) {
+    const dpr = window.devicePixelRatio || 1; cv.width = G.w * dpr; cv.height = G.h * dpr;
+    const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height);
+    if (!S.regions || !C || !C.length) return;
+    const cell = 3, x0 = Math.round(G.L), x1 = Math.round(G.w - G.R), y0 = Math.round(G.T), y1 = Math.round(G.h - G.B);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    for (let px = x0; px < x1; px += cell) for (let py = y0; py < y1; py += cell) {
+      const k = nearest({ x: G.ix(px + cell / 2), y: G.iy(py + cell / 2) }, C, sc);
+      ctx.fillStyle = COLORS[k] + "1A"; ctx.fillRect(px, py, Math.min(cell, x1 - px), Math.min(cell, y1 - py)); }
+  }
+  svg.addEventListener("click", ev => {
+    if (!S.placing) return; const r = svg.getBoundingClientRect(); const x = G.ix(ev.clientX - r.left), y = G.iy(ev.clientY - r.top);
+    if (x < 0 || x > CFG.X.max || y < 0 || y > CFG.Y.max) return;
+    S.C.push([Math.round(x * 2) / 2, Math.round(y * 4) / 4]);
+    if (S.C.length >= S.K) { const C = S.C; S.placing = false; $("clickBtn").setAttribute("aria-pressed", "false"); begin(C, "Hand-placed start"); }
+    else { $("stepStatus").textContent = `Placed ${S.C.length} of ${S.K}. Keep clicking.`; draw(); }
+  });
+  new ResizeObserver(() => draw()).observe(wrap);
+
+  // ---------- spark ----------
+  function drawSpark() {
+    const s = $("spark"); s.innerHTML = ""; const H = S.wssHist; if (H.length < 1) return;
+    const W = 390, Hh = 70, L = 6, R = 6, T = 8, B = 10; const max = Math.max(...H), min = Math.min(...H);
+    const x = i => L + (H.length === 1 ? 0 : i / (H.length - 1) * (W - L - R)), y = v => T + (max === min ? .5 : (max - v) / (max - min)) * (Hh - T - B);
+    el("polyline", { points: H.map((v, i) => `${x(i)},${y(v)}`).join(" "), fill: "none", stroke: "#004479", "stroke-width": 2 }, s);
+    H.forEach((v, i) => el("circle", { cx: x(i), cy: y(v), r: 3, fill: "#004479" }, s));
+  }
+
+  // ---------- profile ----------
+  function topNames() {
+    if (!S.a) return null; const out = [];
+    for (let k = 0; k < S.K; k++) { const cnt = {}; pts.forEach((p, i) => { if (S.a[i] === k && p.seg) { const key = p.seg.trim().toLowerCase(); cnt[key] = cnt[key] || { n: 0, text: p.seg.trim() }; cnt[key].n++; } });
+      const best = Object.values(cnt).sort((a, b) => b.n - a.n)[0]; out.push(best ? best.text : ""); }
+    return out;
+  }
+  function profile() {
+    const tb = $("prof"); tb.innerHTML = "";
+    if (!S.a || !S.C) { tb.innerHTML = `<tr><td colspan="6" class="muted" style="text-align:left">Appears after the first Assign.</td></tr>`; return; }
+    const top = S.showNames ? topNames() : null;
+    for (let k = 0; k < S.C.length; k++) { const m = pts.filter((p, i) => S.a[i] === k); const n = m.length;
+      const mp = n ? m.reduce((s, p) => s + p.x, 0) / n : NaN, mh = n ? m.reduce((s, p) => s + p.y, 0) / n : NaN;
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td><span class="swatch" style="background:${COLORS[k]}"></span>${CNAMES[k]}</td><td>${n}</td><td>${pts.length ? Math.round(n / pts.length * 100) : 0}</td><td>${n ? fmt1(mp) : "–"}</td><td>${n ? fmt1(mh) : "–"}</td><td class="nm">${top && top[k] ? escapeHtml(top[k]) : (S.askNames ? "<span class='muted'>waiting…</span>" : "")}</td>`;
+      tb.appendChild(tr); }
+    if (S.showNames) publish();
+  }
+
+  // ---------- 20 random starts ----------
+  let startsRes = [];
+  $("startsBtn").onclick = () => {
+    if (pts.length < S.K) { toast(`Need at least ${S.K} answers.`); return; }
+    const runs = []; for (let i = 0; i < 20; i++) { const C0 = randomStart(pts, S.K); runs.push({ C0, ...runKmeans(pts, C0, sc) }); }
+    const sig = a => { const g = {}; a.forEach((k, i) => { (g[k] = g[k] || []).push(i); }); return Object.values(g).map(x => x.join(".")).sort().join("|"); };
+    const groups = {}; runs.forEach(r => { const key = sig(r.a); (groups[key] = groups[key] || { w: r.w, n: 0, run: r }).n++; });
+    startsRes = Object.values(groups).sort((a, b) => a.w - b.w);
+    $("startsMsg").textContent = startsRes.length === 1 ? "All 20 starts found the same answer." : `${startsRes.length} different answers from 20 starts.`;
+    drawStarts();
+  };
+  function drawStarts() {
+    const s = $("startsSvg"); s.innerHTML = ""; const rows = startsRes.slice(0, 6); const rh = 30; const Hh = rows.length * rh + 6; s.setAttribute("viewBox", `0 0 390 ${Hh}`);
+    const max = Math.max(...rows.map(r => r.n));
+    rows.forEach((r, i) => { const y = 4 + i * rh; const w = r.n / max * 170; const g = el("g", { style: "cursor:pointer" }, s);
+      el("text", { x: 92, y: y + 18, "text-anchor": "end", "font-size": 13, fill: "#14243A", "font-family": "IBM Plex Mono, monospace" }, g).textContent = (r.w >= 100 ? Math.round(r.w) : fmt1(r.w));
+      el("rect", { x: 100, y: y + 4, width: Math.max(w, 3), height: 20, rx: 3, fill: i === 0 ? "#1F7A6E" : "#C00000" }, g);
+      el("text", { x: 106 + w, y: y + 18, "font-size": 13, fill: "#14243A" }, g).textContent = `${r.n} of 20` + (i === 0 ? " · best" : "");
+      g.addEventListener("click", () => { S.C = r.run.C.map(c => c.slice()); S.a = r.run.a.slice(); S.assignC = S.C.map(c => c.slice()); S.prevA = null; S.prevC = null; S.phase = "assign"; S.done = true; S.round = 0; S.wssHist = [r.w];
+        $("stepStatus").textContent = `Showing an answer with total squared distance ${r.w >= 100 ? Math.round(r.w) : fmt1(r.w)} (found ${r.n} of 20 times).`; updateButtons(); draw(); profile(); publish(); }); });
+  }
+
+  // ---------- elbow ----------
+  $("elbowBtn").onclick = () => {
+    if (pts.length < 8) { toast("Need at least 8 answers."); return; }
+    const vals = []; for (let K = 1; K <= 8; K++) { let best = Infinity; for (let t = 0; t < 15; t++) best = Math.min(best, runKmeans(pts, randomStart(pts, K), sc).w); vals.push(best); }
+    const s = $("elbowSvg"); s.innerHTML = ""; const W = 390, Hh = 180, L = 30, R = 26, T = 24, B = 30; s.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+    const max = vals[0] || 1; const x = K => L + (K - 1) / 7 * (W - L - R), y = v => T + (1 - v / max) * (Hh - T - B);
+    el("line", { x1: L, x2: W - R, y1: Hh - B, y2: Hh - B, stroke: "#DCE3EB" }, s);
+    for (let K = 1; K <= 8; K++) el("text", { x: x(K), y: Hh - B + 17, "text-anchor": "middle", "font-size": 12, fill: "#5C6B7E" }, s).textContent = K;
+    el("text", { x: (L + W - R) / 2, y: Hh - 2, "text-anchor": "middle", "font-size": 11.5, fill: "#5C6B7E" }, s).textContent = "number of segments K";
+    el("polyline", { points: vals.map((v, i) => `${x(i + 1)},${y(v)}`).join(" "), fill: "none", stroke: "#004479", "stroke-width": 2.2 }, s);
+    vals.forEach((v, i) => { el("circle", { cx: x(i + 1), cy: y(v), r: i + 1 === S.K ? 5.5 : 3.5, fill: i + 1 === S.K ? "#D19809" : "#004479" }, s);
+      el("text", { x: x(i + 1), y: y(v) - 8, "text-anchor": "middle", "font-size": 10.5, fill: "#5C6B7E", "font-family": "IBM Plex Mono, monospace" }, s).textContent = v >= 100 ? Math.round(v) : fmt1(v); });
+  };
+
+  // ---------- demo data ----------
+  function demoData(n) {
+    const rnd = (a, b) => a + Math.random() * (b - a), out = [];
+    for (let i = 0; i < n; i++) { const u = Math.random(); let x, y;
+      if (u < 0.45) { x = Math.round(rnd(0, 1.6)); y = rnd(2.5, 6.5); }          // lurkers
+      else if (u < 0.75) { x = Math.round(rnd(0, 2)); y = rnd(0, 1.8); }         // light users
+      else { x = Math.round(rnd(5, 15)); y = rnd(1.5, 5.5); }                   // creators
+      out.push({ posts: Math.min(20, x), hours: Math.min(8, Math.round(y * 2) / 2), nick: "", t: Date.now() + i, demo: true }); }
+    return out;
+  }
+
+  store.onResponses(v => {
+    raw = v || {};
+    const ents = Object.entries(raw).map(([u, r]) => [u, clean(r)]).filter(([u, r]) => r).sort((a, b) => a[1].t - b[1].t || (a[0] < b[0] ? -1 : 1));
+    const prevU = uids.join(",");
+    uids = ents.map(e => e[0]); pts = ents.map(([u, r]) => ({ x: r.posts, y: r.hours, u, nick: r.nick, seg: r.seg, demo: r.demo }));
+    $("nCount").textContent = pts.length;
+    if (uids.join(",") !== prevU && S.C) { // data changed during a run: keep centres, recompute against new data
+      sc = scaleOf(pts, S.std);
+      if (S.a) { S.a = assignAll(pts, S.assignC || S.C, sc); }
+    } else sc = scaleOf(pts, S.std);
+    draw(); profile(); if (S.C) publish();
+  });
+  resetRun("Waiting for answers. Then choose a start.");
+}
+
+/* ================= boot ================= */
+if (isInstructor) instructor(); else student();
+})();
+</script>
 </body>
 </html>
